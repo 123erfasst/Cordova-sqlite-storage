@@ -90,23 +90,42 @@
 
   SQLitePlugin.prototype.openDBs = {};
 
-  SQLitePlugin.prototype.addTransaction = function(t) {
+  SQLitePlugin.prototype.initializeQueues = function() {
     if (!txLocks[this.dbname]) {
       txLocks[this.dbname] = {
         queue: [],
+        priorityQueue: [],
         inProgress: false
       };
     }
-    txLocks[this.dbname].queue.push(t);
+  }
+
+  SQLitePlugin.prototype.addNewTransaction = function(t, queueMethod) {
+    this.initializeQueues();
+    queueMethod(t);
     if (this.dbname in this.openDBs && this.openDBs[this.dbname] !== DB_STATE_INIT) {
       this.startNextTransaction();
     } else {
       if (this.dbname in this.openDBs) {
-        console.log('new transaction is queued, waiting for open operation to finish');
+        console.log('new transaction is waiting for open operation');
       } else {
         console.log('database is closed, new transaction is [stuck] waiting until db is opened again!');
       }
     }
+  };
+
+  SQLitePlugin.prototype.addTransaction = function(t) {
+    var self = this;
+    this.addNewTransaction(t, function(x) {
+      txLocks[self.dbname].queue.push(x);
+    });
+  };
+
+  SQLitePlugin.prototype.addPriorityTransaction = function(t) {
+    var self = this;
+    this.addNewTransaction(t, function(x) {
+      txLocks[self.dbname].priorityQueue.push(x);
+    });
   };
 
   SQLitePlugin.prototype.transaction = function(fn, error, success) {
@@ -115,6 +134,14 @@
       return;
     }
     this.addTransaction(new SQLitePluginTransaction(this, fn, error, success, true, false));
+  };
+
+  SQLitePlugin.prototype.priorityTransaction = function(fn, error, success) {
+    if (!this.openDBs[this.dbname]) {
+      error(newSQLError('database not open'));
+      return;
+    }
+    this.addPriorityTransaction(new SQLitePluginTransaction(this, fn, error, success, true, false));
   };
 
   SQLitePlugin.prototype.readTransaction = function(fn, error, success) {
@@ -139,9 +166,13 @@
         if (!txLock) {
           console.log('cannot start next transaction: database connection is lost');
           return;
-        } else if (txLock.queue.length > 0 && !txLock.inProgress) {
+        } else if ((txLock.queue.length + txLock.priorityQueue.length) > 0 && !txLock.inProgress) {
           txLock.inProgress = true;
-          txLock.queue.shift().start();
+          if (txLock.priorityQueue.length > 0) {
+            txLock.priorityQueue.shift().start();
+          } else {
+            txLock.queue.shift().start();
+          }
         }
       };
     })(this));
@@ -150,13 +181,19 @@
   SQLitePlugin.prototype.abortAllPendingTransactions = function() {
     var j, len1, ref, tx, txLock;
     txLock = txLocks[this.dbname];
-    if (!!txLock && txLock.queue.length > 0) {
+    if (!!txLock && (txLock.queue.length + txLock.priorityQueue.length) > 0) {
       ref = txLock.queue;
       for (j = 0, len1 = ref.length; j < len1; j++) {
         tx = ref[j];
         tx.abortFromQ(newSQLError('Invalid database handle'));
       }
+      ref = txLock.priorityQueue;
+      for (l = 0, len1 = ref.length; l < len1; l++) {
+        tx = ref[l];
+        tx.abortFromQ(newSQLError('Invalid database handle'));
+      }
       txLock.queue = [];
+      txLock.priorityQueue = [];
       txLock.inProgress = false;
     }
   };
@@ -186,7 +223,7 @@
             success(_this);
           }
           txLock = txLocks[_this.dbname];
-          if (!!txLock && txLock.queue.length > 0 && !txLock.inProgress) {
+          if (!!txLock && (txLock.queue.length + txLock.priorityQueue.length) > 0 && !txLock.inProgress) {
             _this.startNextTransaction();
           }
         };
@@ -225,7 +262,7 @@
       console.log('CLOSE database: ' + this.dbname);
       delete this.openDBs[this.dbname];
       if (txLocks[this.dbname]) {
-        console.log('closing db with transaction queue length: ' + txLocks[this.dbname].queue.length);
+        console.log('closing db with transaction queue length: ' + (txLocks[this.dbname].queue.length + txLocks[this.dbname].priorityQueue.length));
       } else {
         console.log('closing db with no transaction lock state');
       }
