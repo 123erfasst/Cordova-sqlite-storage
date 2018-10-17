@@ -1,5 +1,8 @@
 # Cross-platform SQLite storage plugin for Cordova/PhoneGap
 
+Changes: We added a priority transaction queue, which runs before the default transaction queue.
+         Use priorityTransaction() to add querys to the prio-queue.
+
 Native SQLite component with API based on HTML5/[Web SQL (DRAFT) API](http://www.w3.org/TR/webdatabase/) for the following platforms:
 - Android
 - iOS
