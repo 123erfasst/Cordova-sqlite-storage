@@ -3,7 +3,7 @@
   "version": "2.5.2",
   "description": "Native interface to SQLite for PhoneGap/Cordova",
   "cordova": {
-    "id": "cordova-sqlite-storage",
+    "id": "cordova-sqlite-storage-priority",
     "platforms": [
       "android",
       "ios",
