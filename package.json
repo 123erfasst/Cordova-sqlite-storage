@@ -1,5 +1,5 @@
 {
-  "name": "cordova-sqlite-storage",
+  "name": "cordova-sqlite-storage-priority",
   "version": "2.5.2",
   "description": "Native interface to SQLite for PhoneGap/Cordova",
   "cordova": {
