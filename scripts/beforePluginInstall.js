@@ -6,11 +6,12 @@
 var path = require('path');
 var exec = require('child_process').exec;
 
+var Q = require('q');
+
 // XXX FUTURE TBD auto-detect:
 var package_name = 'cordova-sqlite-storage-priority';
 
 module.exports = function (context) {
-    var Q = context.requireCordovaModule('q');
     var deferral = new Q.defer();
 
     console.log('installing external dependencies via npm');
